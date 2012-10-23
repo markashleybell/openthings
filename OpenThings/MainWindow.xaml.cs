@@ -24,57 +24,58 @@ namespace OpenThings
     /// </summary>
     public partial class MainWindow : Window
     {
-        private Dictionary<string, Shortcut> _paths;
+        private Dictionary<string, Shortcut> _applications;
         private ResultsWindow _resultsWindow;
 
         public MainWindow()
         {
             InitializeComponent();
 
-            _paths = new Dictionary<string, Shortcut>();
+            // Hold the list of applications/shortcuts in memory
+            _applications = new Dictionary<string, Shortcut>();
 
+            // Get a list of the paths to search for shortcuts and apps
             var config = System.Reflection.Assembly.GetExecutingAssembly().Location;
-
             config = config.Substring(0, config.LastIndexOf("\\")) + "\\paths.txt";
 
-
+            // Scan each folder specified in paths.txt
             using (var reader = File.OpenText(config))
             {
                 while (reader.Peek() >= 0)
                 {
                     var path = reader.ReadLine();
-
                     ScanFolder(path);
                 }
             }
 
             _resultsWindow = new ResultsWindow();
-            //_resultsWindow.Show();
-            //_resultsWindow.listView1.ItemsSource = _matches;
-
-            //this.Activate();
-            //this.Top = 0;
-            //textBox1.Focus();
         }
 
+        // Using Directory.GetFiles with the SearchOption.AllDirectories option doesn't 
+        // allow the handling of access exceptions, so we're using our own recursive method
         private void ScanFolder(string path)
         {
             try
             {
-                var files = Directory.GetFiles(path, "*.*").Where(x => x.EndsWith(".exe") || x.EndsWith(".lnk")).ToList();
+                // Just get shortcuts and .exe files
+                var files = Directory.GetFiles(path, "*.*")
+                                     .Where(x => x.EndsWith(".exe") || x.EndsWith(".lnk"))
+                                     .ToList();
 
                 foreach (var item in files)
                 {
                     var name = System.IO.Path.GetFileNameWithoutExtension(item);
 
-                    if (name != null && item != null)
-                        _paths.Add(name.ToUpper(), new Shortcut { 
+                    // Don't add Uninstall shortcuts to the list
+                    if (name != null && item != null && !name.ToUpper().Contains("UNINSTALL"))
+                        _applications.Add(name.ToUpper(), new Shortcut { 
                             Weighting = 0,
                             Path = item,
                             Name = name
                         });
                 }
 
+                // Scan each subfolder of the current folder
                 foreach (var folder in Directory.GetDirectories(path))
                 {
                     ScanFolder(folder);
@@ -82,41 +83,49 @@ namespace OpenThings
             }
             catch (Exception ex)
             {
-                // Ignore the folder, we don't have access
+                // Ignore this folder, we don't have access
             }
         }
 
-        private void onKeyUp(object sender, KeyEventArgs e)
+        private void window_OnKeyUp(object sender, KeyEventArgs e)
         {
-            // MessageBox.Show(e.Key.ToString());
-
             var current = _resultsWindow.listBox1.SelectedIndex;
 
+            // Move the selection cursor up one position
             if (e.Key == Key.Up && current > 0)
             {
                 _resultsWindow.listBox1.SelectedIndex = current - 1;
             }
 
+            // Move the selection cursor down one position
             if (e.Key == Key.Down && current < _resultsWindow.listBox1.Items.Count)
             {
                 _resultsWindow.listBox1.SelectedIndex = current + 1;
             }
 
+            // When we hit enter
             if (e.Key == Key.Enter)
             {
+                // Allow app exit (temporary, otherwise you can only quit using task manager...)
                 if(textBox1.Text.ToUpper() == "QUIT")
                     Application.Current.Shutdown();
 
+                // If there's an item selected
                 if (current != -1)
                 {
+                    // Get the selected item
                     var item = (ListBoxItem)_resultsWindow.listBox1.SelectedItem;
 
+                    // Hide the text entry box and the results
                     this.Top = -100;
                     _resultsWindow.Hide();
 
+                    // Get the Shortcut object associated with the selected item
                     var shortcut = (Shortcut)item.Tag;
-
-                    _paths[shortcut.Name.ToUpper()].Weighting += 1;
+                    // Each time an item is launched, add one to its weighting. This way,
+                    // products which are launched more often gradually bubble up to the 
+                    // top of the results lists
+                    _applications[shortcut.Name.ToUpper()].Weighting += 1;
 
                     try
                     {
@@ -129,36 +138,39 @@ namespace OpenThings
                 }
             }
 
+            // Escape just clears and closes the app
             if (e.Key == Key.Escape)
             {
                 this.Top = -100;
 
-                textBox1.Text = "";
+                this.textBox1.Text = "";
                 this.textBox1.Focus();
 
                 _resultsWindow.Hide();
             }
         }
 
+        // Handle text entry in the main text box control
         private void textBox1_TextChanged(object sender, TextChangedEventArgs e)
         {
+            // Get the current value of the textbox (search text)
             var text = textBox1.Text.ToUpper();
-            var matches = _paths.Where(x => x.Key.Contains(text)).ToDictionary(x => x.Key, x => x.Value);
 
-            //_matches.Clear();
+            // Get all the apps from our in-memory list where the key contains our search text
+            var matches = _applications.Where(x => x.Key.Contains(text)).ToDictionary(x => x.Key, x => x.Value);
 
-            //foreach (var match in matches)
-            //    _matches.Add(match);
-
+            // Clear the current selection
             _resultsWindow.listBox1.SelectedItem = null;
 
             if (textBox1.Text != "" && matches.Count > 0)
             {
                 _resultsWindow.listBox1.Items.Clear();
 
+                // Order the matching applications alphabetically and then by their weighting value (see window_OnKeyUp)
                 foreach (KeyValuePair<string, Shortcut> match in matches.OrderBy(x => x.Value.Name).OrderByDescending(x => x.Value.Weighting))
                     _resultsWindow.listBox1.Items.Add(new ListBoxItem { Tag = match.Value, Content = match.Value.Name });
 
+                // Kill the selection
                 _resultsWindow.listBox1.SelectedIndex = 0;
 
                 _resultsWindow.Show();
@@ -207,28 +219,21 @@ namespace OpenThings
         {
             var helper = new WindowInteropHelper(this);
 
-            const uint MOD_ALT = 0x1;     // If bit 0 is set, Alt is pressed
-            const uint MOD_CONTROL = 0x2; // If bit 1 is set, Ctrl is pressed
-            const uint MOD_SHIFT = 0x4;   // If bit 2 is set, Shift is pressed 
-            const uint MOD_WIN = 0x8;     // If bit 3 is set, Win is pressed
+            // Set up some key codes
+            const uint MOD_ALT = 0x1;     
+            const uint MOD_CONTROL = 0x2; 
+            const uint MOD_SHIFT = 0x4;   
+            const uint MOD_WIN = 0x8;   
 
             const uint VK_F10 = 0x79;
             const uint VK_SPACE = 0x20;
             const uint VK_CAPITAL = 0x14;
 
-            const uint VK_LSHIFT = 0xA0;
-            const uint VK_RSHIFT = 0xA1;
-
-            
-            
-            //if (!RegisterHotKey(helper.Handle, HOTKEY_ID, 0, VK_CAPITAL))
-            //{
-            //    // handle error
-            //}
-
+            // Set third parameter to 0 for no modifier key
             if (!RegisterHotKey(helper.Handle, HOTKEY_ID, MOD_ALT, VK_SPACE))
             {
-                // handle error
+                // Don't handle error
+                MessageBox.Show("Couldn't register hotkey");
             }
         }
 
@@ -241,6 +246,7 @@ namespace OpenThings
         private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
             const int WM_HOTKEY = 0x0312;
+
             switch (msg)
             {
                 case WM_HOTKEY:
@@ -253,11 +259,14 @@ namespace OpenThings
                     }
                     break;
             }
+
             return IntPtr.Zero;
         }
 
+        // Handle the global hotkey
         private void OnHotKeyPressed()
         {
+            // Toggle the main window's visibility
             if(this.Top < 0)
             {
                 this.Top = 0;
