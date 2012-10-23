@@ -92,12 +92,12 @@ namespace OpenThings
 
             var current = _resultsWindow.listBox1.SelectedIndex;
 
-            if (e.Key == Key.Up)
+            if (e.Key == Key.Up && current > 0)
             {
-                _resultsWindow.listBox1.SelectedIndex = current + 1;
+                _resultsWindow.listBox1.SelectedIndex = current - 1;
             }
 
-            if (e.Key == Key.Down)
+            if (e.Key == Key.Down && current < _resultsWindow.listBox1.Items.Count)
             {
                 _resultsWindow.listBox1.SelectedIndex = current + 1;
             }
