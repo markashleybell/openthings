@@ -24,14 +24,14 @@ namespace OpenThings
     /// </summary>
     public partial class MainWindow : Window
     {
-        private Dictionary<string, string> _paths;
+        private Dictionary<string, Shortcut> _paths;
         private ResultsWindow _resultsWindow;
 
         public MainWindow()
         {
             InitializeComponent();
 
-            _paths = new Dictionary<string, string>();
+            _paths = new Dictionary<string, Shortcut>();
 
             var config = System.Reflection.Assembly.GetExecutingAssembly().Location;
 
@@ -68,7 +68,11 @@ namespace OpenThings
                     var name = System.IO.Path.GetFileNameWithoutExtension(item);
 
                     if (name != null && item != null)
-                        _paths.Add(name, item);
+                        _paths.Add(name.ToUpper(), new Shortcut { 
+                            Weighting = 0,
+                            Path = item,
+                            Name = name
+                        });
                 }
 
                 foreach (var folder in Directory.GetDirectories(path))
@@ -100,6 +104,9 @@ namespace OpenThings
 
             if (e.Key == Key.Enter)
             {
+                if(textBox1.Text.ToUpper() == "QUIT")
+                    Application.Current.Shutdown();
+
                 if (current != -1)
                 {
                     var item = (ListBoxItem)_resultsWindow.listBox1.SelectedItem;
@@ -107,13 +114,28 @@ namespace OpenThings
                     this.Top = -100;
                     _resultsWindow.Hide();
 
-                    Process.Start(item.Tag.ToString());
+                    var shortcut = (Shortcut)item.Tag;
+
+                    _paths[shortcut.Name.ToUpper()].Weighting += 1;
+
+                    try
+                    {
+                        Process.Start(shortcut.Path.ToString());
+                    }
+                    catch (Exception ex)
+                    {
+                        // Something went wrong launching the program
+                    }
                 }
             }
 
             if (e.Key == Key.Escape)
             {
                 this.Top = -100;
+
+                textBox1.Text = "";
+                this.textBox1.Focus();
+
                 _resultsWindow.Hide();
             }
         }
@@ -121,7 +143,7 @@ namespace OpenThings
         private void textBox1_TextChanged(object sender, TextChangedEventArgs e)
         {
             var text = textBox1.Text.ToUpper();
-            var matches = _paths.Where(x => x.Key.ToUpper().Contains(text)).ToDictionary(x => x.Key, x => x.Value);
+            var matches = _paths.Where(x => x.Key.Contains(text)).ToDictionary(x => x.Key, x => x.Value);
 
             //_matches.Clear();
 
@@ -134,8 +156,8 @@ namespace OpenThings
             {
                 _resultsWindow.listBox1.Items.Clear();
 
-                foreach (KeyValuePair<string, string> match in matches)
-                    _resultsWindow.listBox1.Items.Add(new ListBoxItem { Tag = match.Value, Content = match.Key });
+                foreach (KeyValuePair<string, Shortcut> match in matches.OrderBy(x => x.Value.Name).OrderByDescending(x => x.Value.Weighting))
+                    _resultsWindow.listBox1.Items.Add(new ListBoxItem { Tag = match.Value, Content = match.Value.Name });
 
                 _resultsWindow.listBox1.SelectedIndex = 0;
 
@@ -239,6 +261,7 @@ namespace OpenThings
             if(this.Top < 0)
             {
                 this.Top = 0;
+                this.textBox1.Text = "";
                 this.Activate();
                 this.textBox1.Focus();
             }
