@@ -26,6 +26,7 @@ namespace OpenThings
     {
         private Dictionary<string, Shortcut> _applications;
         private ResultsWindow _resultsWindow;
+        private string _currentPath;
 
         public MainWindow()
         {
@@ -35,11 +36,22 @@ namespace OpenThings
             _applications = new Dictionary<string, Shortcut>();
 
             // Get a list of the paths to search for shortcuts and apps
-            var config = System.Reflection.Assembly.GetExecutingAssembly().Location;
-            config = config.Substring(0, config.LastIndexOf("\\")) + "\\paths.txt";
+            _currentPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+            _currentPath = _currentPath.Substring(0, _currentPath.LastIndexOf("\\")) + "\\paths.txt";
+
+            LoadApplicationList(_currentPath);
+
+            _resultsWindow = new ResultsWindow();
+        }
+
+        // Given a text file with one path per line, retrieve all the executables 
+        // and shortcuts below each path
+        private void LoadApplicationList(string pathConfigFile)
+        {
+            _applications.Clear();
 
             // Scan each folder specified in paths.txt
-            using (var reader = File.OpenText(config))
+            using (var reader = File.OpenText(_currentPath))
             {
                 while (reader.Peek() >= 0)
                 {
@@ -47,8 +59,6 @@ namespace OpenThings
                     ScanFolder(path);
                 }
             }
-
-            _resultsWindow = new ResultsWindow();
         }
 
         // Using Directory.GetFiles with the SearchOption.AllDirectories option doesn't 
@@ -109,6 +119,16 @@ namespace OpenThings
                 // Allow app exit (temporary, otherwise you can only quit using task manager...)
                 if(textBox1.Text.ToUpper() == "QUIT")
                     Application.Current.Shutdown();
+
+                // Allow rescanning of paths to add new apps without restarting
+                if (textBox1.Text.ToUpper() == "RESCAN")
+                {
+                    this.Top = -100;
+                    this.textBox1.Text = "";
+                    this.textBox1.Focus();
+                    _resultsWindow.Hide();
+                    LoadApplicationList(_currentPath);
+                }
 
                 // If there's an item selected
                 if (current != -1)
