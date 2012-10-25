@@ -37,7 +37,7 @@ namespace OpenThings
 
             // Get a list of the paths to search for shortcuts and apps
             _currentPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-            _currentPath = _currentPath.Substring(0, _currentPath.LastIndexOf("\\")) + "\\paths.txt";
+            _currentPath = _currentPath.Substring(0, _currentPath.LastIndexOf("\\"));
 
             LoadApplicationList(_currentPath);
 
@@ -50,20 +50,34 @@ namespace OpenThings
         {
             _applications.Clear();
 
+            var weightings = new Dictionary<string,int>();
+
+            // If there's a weightings file, load the weightings into a dictionary
+            // where key = app name and value = weighting
+            if(File.Exists(_currentPath + "\\weighting.txt"))
+            {
+                weightings = (from line in File.ReadAllLines(_currentPath + "\\weighting.txt")
+                              let item = line.Split('|')
+                              select new { 
+                                  k = item[0],
+                                  v = Convert.ToInt32(item[1])
+                              }).ToDictionary(x => x.k, x => x.v);
+            }
+
             // Scan each folder specified in paths.txt
-            using (var reader = File.OpenText(_currentPath))
+            using (var reader = File.OpenText(_currentPath + "\\paths.txt"))
             {
                 while (reader.Peek() >= 0)
                 {
                     var path = reader.ReadLine();
-                    ScanFolder(path);
+                    ScanFolder(path, weightings);
                 }
             }
         }
 
         // Using Directory.GetFiles with the SearchOption.AllDirectories option doesn't 
         // allow the handling of access exceptions, so we're using our own recursive method
-        private void ScanFolder(string path)
+        private void ScanFolder(string path, Dictionary<string, int> weightings)
         {
             try
             {
@@ -76,10 +90,13 @@ namespace OpenThings
                 {
                     var name = System.IO.Path.GetFileNameWithoutExtension(item);
 
+                    var key = name.ToUpper();
+
                     // Don't add Uninstall shortcuts to the list
-                    if (name != null && item != null && !name.ToUpper().Contains("UNINSTALL"))
-                        _applications.Add(name.ToUpper(), new Shortcut { 
-                            Weighting = 0,
+                    if (name != null && item != null && !key.Contains("UNINSTALL"))
+                        _applications.Add(key, new Shortcut { 
+                            // If there's a pre-existing weighting for this item, assign it
+                            Weighting = (weightings.ContainsKey(key)) ? weightings[key] : 0,
                             Path = item,
                             Name = name
                         });
@@ -88,13 +105,23 @@ namespace OpenThings
                 // Scan each subfolder of the current folder
                 foreach (var folder in Directory.GetDirectories(path))
                 {
-                    ScanFolder(folder);
+                    ScanFolder(folder, weightings);
                 }
             }
             catch (Exception ex)
             {
                 // Ignore this folder, we don't have access
             }
+        }
+
+        private void PersistWeighting()
+        {
+            var weightingList = new List<string>();
+
+            foreach (var app in _applications)
+                weightingList.Add(app.Key + "|" + app.Value.Weighting);
+
+            File.WriteAllText(_currentPath + "\\weighting.txt", string.Join(Environment.NewLine, weightingList.ToArray()));
         }
 
         private void window_OnKeyUp(object sender, KeyEventArgs e)
@@ -146,6 +173,8 @@ namespace OpenThings
                     // products which are launched more often gradually bubble up to the 
                     // top of the results lists
                     _applications[shortcut.Name.ToUpper()].Weighting += 1;
+                    // Save the weighting values to a simple text file
+                    PersistWeighting();
 
                     try
                     {
