@@ -25,7 +25,7 @@ Then just hit `ALT-SPACE`* and type a few characters which from the name of the 
 
 This utility is licensed under the [GNU GPL 3.0](http://opensource.org/licenses/gpl-3.0.html).  
 
-
-<span style="font-size: 0.8em;">*I know this is a Windows system shortcut, but I never used it and it's the same one I used with Launchy. If you don't like it, fork the code and put in your own preferred shortcut(s).</span>
+<br />
+<sub>* I know this is a Windows system shortcut, but I never used it and it's the same one I used with Launchy. If you don't like it, fork the code and put in your own preferred shortcut(s).</sub>
 
 
