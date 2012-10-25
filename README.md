@@ -1,4 +1,4 @@
-# OpenThings is a keyboard-powered application launcher for Windows. 
+# OpenThings is a keyboard-powered app launcher for Windows. 
 
 ----------
 
@@ -12,7 +12,7 @@ So I built this during a couple of lunch hours. OpenThings lets you... well, ope
 
 ## System Requirements
 
-Windows 7 or Server 2008 with the .NET Framework 4 installed (it might well work on previous versions, but I haven't even tried them out)
+Windows 7 or Server 2008 with the .NET Framework 4 installed—it might well work on previous versions, but I haven't even tried them out).
 
 ----------
 
